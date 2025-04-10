@@ -1,34 +1,58 @@
 from flask import Flask, render_template_string
-import os
 import subprocess
 import getpass
 import datetime
-import pytz
+import platform
+import socket
+import os
 
 app = Flask(__name__)
 
 @app.route('/htop')
 def htop():
-    # Get full name (you should replace this with your actual name)
-    full_name = "Your Full Name"  # Replace with your name
+    # Get full name (replace with your actual name)
+    full_name = "Your Full Name"  # REPLACE THIS WITH YOUR NAME
     
     # Get system username
     username = getpass.getuser()
     
     # Get server time in IST
-    ist = pytz.timezone('Asia/Kolkata')
-    server_time = datetime.datetime.now(ist).strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
+    # Since pytz might not be available, using a fixed offset
+    utc_time = datetime.datetime.utcnow()
+    ist_offset = datetime.timedelta(hours=5, minutes=30)  # IST is UTC+5:30
+    ist_time = utc_time + ist_offset
+    server_time = ist_time.strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
     
-    # Get top output
+    # Get a simplified top output that works on most systems
     try:
-        top_output = subprocess.check_output(
-            ['top', '-b', '-n', '1'], 
-            universal_newlines=True
-        )
+        if platform.system() == "Linux":
+            top_output = subprocess.check_output(
+                ['top', '-b', '-n', '1'], 
+                universal_newlines=True,
+                timeout=5  # Add timeout to prevent hanging
+            )
+        else:
+            # Simplified system info for non-Linux systems
+            top_output = "System Information:\n"
+            top_output += f"System: {platform.system()}\n"
+            top_output += f"Node: {platform.node()}\n"
+            top_output += f"Release: {platform.release()}\n"
+            top_output += f"Version: {platform.version()}\n"
+            top_output += f"Machine: {platform.machine()}\n"
+            top_output += f"Processor: {platform.processor()}\n"
+            
+            # Add memory info if on Linux
+            if os.path.exists('/proc/meminfo'):
+                try:
+                    with open('/proc/meminfo', 'r') as f:
+                        meminfo = f.read()
+                    top_output += "\nMemory Info:\n" + meminfo
+                except:
+                    top_output += "\nCould not read memory info."
     except Exception as e:
-        top_output = f"Error getting top output: {str(e)}"
+        top_output = f"Error getting system information: {str(e)}"
     
-    # HTML template for the page
+    # HTML template
     template = """
     <!DOCTYPE html>
     <html>
@@ -59,5 +83,5 @@ def htop():
     )
 
 if __name__ == '__main__':
-    # Run the application on a specific port with public visibility
+    # Run on all network interfaces, port 5000
     app.run(host='0.0.0.0', port=5000, debug=True)
